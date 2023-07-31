@@ -16,6 +16,10 @@ class LoggerBase
      * @param string $messageToWrite The message to write.
      *
      */
+
+	public $ServiceRequestLoggingLocation;
+	public $EnableRequestResponseLogging;
+
     public function Log($idsTraceLevel, $messageToWrite)
     {
         $fileToWrite = CoreConstants::DEFAULT_LOGGINGLOCATION . '/executionlog.txt';
