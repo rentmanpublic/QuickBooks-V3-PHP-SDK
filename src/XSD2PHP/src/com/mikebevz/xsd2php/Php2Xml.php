@@ -46,6 +46,7 @@ class Php2Xml extends Common
 
 
     protected $rootTagName;
+	protected $rootNsName;
 
     private $logger;
 
