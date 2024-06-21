@@ -16,12 +16,14 @@ class ClientFactory{
   //private constructor for static factory class
   private function __construct(){}
 
-  /**
-   * A static factory to create Http Client.
-   * @param String HttpClient Name, default is using curl. Developer can set guzzleclient by passing 'guzzle' as client Name
-   * @return HttpClientInterface
-   */
-  public static function createClient($clientName = CoreConstants::CLIENT_CURL){
+	/**
+	 * A static factory to create Http Client.
+	 * @param String $clientName HttpClient Name, default is using curl. Developer can set guzzleclient by passing 'guzzle' as client Name
+	 * @param ?GuzzleHttpClient   $client
+	 * @return HttpClientInterface
+	 * @throws SdkException
+	 */
+  public static function createClient($clientName = CoreConstants::CLIENT_CURL, $client = null){
       if($clientName == CoreConstants::CLIENT_CURL){
          if(extension_loaded('curl')){
             return new CurlHttpClient();
@@ -37,6 +39,14 @@ class ClientFactory{
             throw new SdkException("guzzle client cannot be found. Cannot create guzzle http client for the SDK.");
           }
       }
+
+	  if ($clientName === CoreConstants::CLIENT_CUSTOM_GUZZLE) {
+		  if(class_exists('GuzzleHttp\Client')){
+			  return $client;
+		  }else{
+			  throw new SdkException("guzzle client cannot be found. Cannot create guzzle http client for the SDK.");
+		  }
+	  }
 
       throw new SdkException("The client Name you passed is not supported. Please use either 'curl' or 'guzzle' for the client Name.");
   }

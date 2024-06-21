@@ -20,7 +20,7 @@ use QuickBooksOnline\API\Core\CoreHelper;
 use QuickBooksOnline\API\Core\Http\Serialization\IEntitySerializer;
 use QuickBooksOnline\API\Core\Http\Serialization\XmlObjectSerializer;
 use QuickBooksOnline\API\Core\HttpClients\FaultHandler;
-use QuickBooksOnline\API\Core\HttpClients\RestHandler;
+use QuickBooksOnline\API\Core\HttpClients\GuzzleHttpClient;
 use QuickBooksOnline\API\Core\ServiceContext;
 use QuickBooksOnline\API\Core\CoreConstants;
 use QuickBooksOnline\API\Core\HttpClients\SyncRestHandler;
@@ -28,9 +28,7 @@ use QuickBooksOnline\API\Core\HttpClients\RequestParameters;
 use QuickBooksOnline\API\Core\Http\Serialization\JsonObjectSerializer;
 use QuickBooksOnline\API\Core\Http\Serialization\SerializationFormat;
 use QuickBooksOnline\API\Data\IPPAttachable;
-use QuickBooksOnline\API\Data\IPPEntitlementsResponse;
 use QuickBooksOnline\API\Data\IPPIntuitEntity;
-use QuickBooksOnline\API\Data\IPPRecurringTransaction;
 use QuickBooksOnline\API\Data\IPPTaxService;
 use QuickBooksOnline\API\Data\IPPid;
 use QuickBooksOnline\API\Exception\IdsException;
@@ -150,6 +148,14 @@ class DataService
      */
     private $clientName = CoreConstants::CLIENT_CURL;
 
+	/**
+	 * Custom guzzle client
+	 *
+	 * @var ?GuzzleHttpClient
+	 */
+	private $client = null;
+
+
 
     /**
      * Initializes a new instance of the DataService class. The old way to construct the dataService. Used by PHP SDK < 3.0.0
@@ -204,17 +210,18 @@ class DataService
         }
     }
 
-    /**
-     * Set the SyncRest Handler for the DataService. If the client Name changed, the underlying Client that SyncRestHandler used will also changed.
-     *
-     * @var ServiceContext $serviceContext         The service Context for this DataService
-     * @return $this
-     *
-     */
+	/**
+	 * Set the SyncRest Handler for the DataService. If the client Name changed, the underlying Client that SyncRestHandler used will also changed.
+	 *
+	 * @return $this
+	 *
+	 * @throws SdkException
+	 * @var ServiceContext $serviceContext The service Context for this DataService
+	 */
     protected function setupRestHandler($serviceContext)
     {
        if(isset($serviceContext)){
-          $client = ClientFactory::createClient($this->getClientName());
+          $client = ClientFactory::createClient($this->getClientName(), $this->client);
           $this->restHandler = new SyncRestHandler($serviceContext, $client);
        }else{
           throw new SdkException("Can not set the Rest Client based on null ServiceContext.");
@@ -356,20 +363,38 @@ class DataService
        return $this->getClientName();
     }
 
-
-    /**
-     * The client Name can be either 'curl', 'guzzle', or 'guzzlehttp'.
-     *
-     * @param String $clientName              The client Name used by the service
-     *
-     * @return $this
-     */
+	/**
+	 * The client Name can be either 'curl', 'guzzle', or 'guzzlehttp'.
+	 *
+	 * @param String $clientName The client Name used by the service
+	 *
+	 * @return $this
+	 * @throws SdkException
+	 * @throws \Exception
+	 */
     public function setClientName($clientName){
        $this->clientName = $clientName;
        $serviceContext = $this->getServiceContext();
        $this->setupRestHandler($serviceContext);
        return $this;
     }
+
+	/**
+	 * The client to be replaced
+	 *
+	 * @param $client
+	 *
+	 * @return $this
+	 * @throws SdkException
+	 * @throws \Exception
+	 */
+	public function setClient($client){
+		$this->client = new GuzzleHttpClient($client);
+		$this->clientName = CoreConstants::CLIENT_CUSTOM_GUZZLE;
+		$serviceContext = $this->getServiceContext();
+		$this->setupRestHandler($serviceContext);
+		return $this;
+	}
 
     /**
      * New Static function for static Reading from Config or Passing Array
@@ -802,13 +827,13 @@ class DataService
         $this->verifyOperationAccess($entity, __FUNCTION__);
         if ($this->isJsonOnly($entity)) {
             $this->forceJsonSerializers();
-        } 
+        }
 
         $httpsPostBody = $this->executeObjectSerializer($entity, $urlResource);
         // Builds resource Uri
         $resourceURI = implode(CoreConstants::SLASH_CHAR, array('company', $this->serviceContext->realmId, $urlResource));
 
-        $uri = $this->handleTaxService($entity, $resourceURI);        
+        $uri = $this->handleTaxService($entity, $resourceURI);
         // Send request
         return $this->sendRequestParseResponseBodyAndHandleHttpError($entity, $uri, $httpsPostBody, DataService::ADD);
     }
@@ -948,7 +973,7 @@ class DataService
             return $responseBody;
         } else {
             $this->lastError = false;
-            
+
             return $this->processDownloadedContent(new ContentWriter($responseBody), $responseCode, $dir, $this->getExportFileNameForPDF($entity, "pdf"));
         }
     }
@@ -1008,7 +1033,7 @@ class DataService
 
         $httpsUri = implode(CoreConstants::SLASH_CHAR, array('company', $this->serviceContext->realmId, 'query'));
         $httpsPostBody = $this->appendPaginationInfo($query, $startPosition, $maxResults);
-        
+
         if(!is_null($includes)) {
             $httpsUri .= "?include=$includes";
         }
